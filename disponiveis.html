@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Números disponíveis — Rifa dos Noivos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Playfair+Display:ital,wght@0,600;1,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EDEEF4;
+    --paper-2:#E1E4EE;
+    --ink:#1B2A57;
+    --ink-soft:#5B6478;
+    --stamp:#8C3245;
+    --stamp-dark:#6E2430;
+    --teal:#3A56A8;
+    --teal-dark:#1B2A57;
+    --gold:#A9BAE8;
+    --line: rgba(27,42,87,0.15);
+    --sold-bg:#D7DCEA;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    padding-bottom:3rem;
+  }
+  .wrap{max-width:980px;margin:0 auto;padding:0 20px;}
+
+  .ticket-header{
+    background:var(--teal-dark);
+    color:var(--paper);
+    padding:2rem 0 1.4rem;
+    border-bottom:6px dashed var(--gold);
+  }
+  .brand .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);font-weight:600;}
+  h1{
+    font-family:'Playfair Display',serif;
+    font-style:italic;
+    font-weight:600;
+    font-size:clamp(26px,4vw,38px);
+    margin:.2rem 0 0;
+  }
+  .event-line{
+    display:block;
+    font-size:13px;
+    color:var(--gold);
+    font-family:'Inter',sans-serif;
+    margin-top:.5rem;
+  }
+  .status-line{
+    font-size:12px;
+    color:rgba(237,238,244,.7);
+    padding-top:.5rem;
+    display:block;
+  }
+
+  .stats-bar{
+    background:var(--paper-2);
+    border-bottom:1px solid var(--line);
+    padding:1rem 0;
+    text-align:center;
+  }
+  .stats-bar .num{
+    font-family:'Oswald',sans-serif;
+    font-size:28px;
+    font-weight:600;
+    color:var(--stamp-dark);
+  }
+  .stats-bar .lbl{
+    font-size:12px;
+    color:var(--ink-soft);
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    margin-left:.4rem;
+  }
+
+  .controls{padding:1.2rem 0 .6rem;}
+  .controls input[type=text]{
+    width:100%;
+    padding:.6rem .9rem;
+    border:1px solid var(--line);
+    border-radius:4px;
+    background:#fff;
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+  }
+
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(52px,1fr));
+    gap:6px;
+    padding:1rem 0 2rem;
+  }
+  .cell{
+    aspect-ratio:1;
+    border:1px solid var(--line);
+    border-radius:6px;
+    background:#fff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:'Oswald',sans-serif;
+    font-weight:600;
+    font-size:13px;
+    color:var(--ink);
+  }
+
+  .empty-msg{
+    text-align:center;
+    padding:3rem 1rem;
+    color:var(--ink-soft);
+    font-size:15px;
+    display:none;
+  }
+  .empty-msg b{color:var(--stamp-dark);}
+
+  .loading-msg{
+    text-align:center;
+    padding:3rem 1rem;
+    color:var(--ink-soft);
+    font-size:14px;
+  }
+
+  @media (max-width:600px){
+    .grid{grid-template-columns:repeat(auto-fill,minmax(42px,1fr));}
+    .cell{font-size:11px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="ticket-header">
+  <div class="wrap brand">
+    <span class="eyebrow">Concorra a uma JBL PartyBox Encore</span>
+    <h1>Rifa dos Noivos — números disponíveis</h1>
+    <span class="event-line">Sorteio dia 12/09 às 20h · @mariisanttos_21</span>
+    <span class="status-line" id="statusLine">Carregando...</span>
+  </div>
+</div>
+
+<div class="stats-bar">
+  <span class="num" id="availableCount">–</span><span class="lbl">números disponíveis</span>
+</div>
+
+<div class="wrap">
+  <div class="controls">
+    <input type="text" id="searchInput" placeholder="Buscar um número específico (ex: 042)">
+  </div>
+
+  <div class="loading-msg" id="loadingMsg">Carregando números disponíveis...</div>
+  <div class="grid" id="grid"></div>
+  <div class="empty-msg" id="emptyMsg">Poxa, não há mais números disponíveis!<br><b>A rifa está esgotada 🎉</b></div>
+</div>
+
+<script>
+// ============================================================
+// Mesma URL do Apps Script usada no index.html — mesma planilha,
+// apenas leitura (sem cadastro, sem cancelamento).
+// ============================================================
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwA4OdK-ZJHViSQEsApbV-vdmZJH9QXdY8baglpDGrURT3vi9BoR0tlYeLZOpY9GsZYLg/exec';
+
+const TOTAL_NUMBERS = 1000;
+let soldSet = new Set();
+let searchTerm = '';
+
+function setStatus(msg){
+  document.getElementById('statusLine').textContent = msg;
+}
+
+async function loadAvailable(){
+  try{
+    const res = await fetch(APPS_SCRIPT_URL + '?action=list');
+    if(!res.ok) throw new Error('Falha ao carregar');
+    const data = await res.json();
+    soldSet = new Set(Object.keys(data.numbers || {}).map(n => parseInt(n)));
+    document.getElementById('loadingMsg').style.display = 'none';
+    renderGrid();
+    setStatus('Atualizado às ' + new Date().toLocaleTimeString('pt-BR'));
+  }catch(e){
+    setStatus('Não foi possível atualizar agora. Tentando novamente...');
+  }
+}
+
+function renderGrid(){
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  let count = 0;
+  for(let i = 1; i <= TOTAL_NUMBERS; i++){
+    if(soldSet.has(i)) continue;
+    if(searchTerm && !String(i).includes(searchTerm)) continue;
+    count++;
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.textContent = String(i).padStart(4,'0');
+    grid.appendChild(cell);
+  }
+  const totalAvailable = TOTAL_NUMBERS - soldSet.size;
+  document.getElementById('availableCount').textContent = totalAvailable;
+  document.getElementById('emptyMsg').style.display = totalAvailable === 0 ? 'block' : 'none';
+  document.getElementById('grid').style.display = totalAvailable === 0 ? 'none' : 'grid';
+}
+
+document.getElementById('searchInput').addEventListener('input', (e)=>{
+  searchTerm = e.target.value.trim();
+  renderGrid();
+});
+
+loadAvailable();
+setInterval(loadAvailable, 15000);
+</script>
+</body>
+</html>
